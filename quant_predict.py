@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 # In[106]:
 
-def quant_pred(df):
+def quant_pred(df, alg):
     
     df.Date = pd.to_datetime(df.Date)
 
@@ -37,10 +37,16 @@ def quant_pred(df):
     
     
     plt.figure(figsize=(20,5))
-    plt.plot(df.Date, macd, label='AMZN MACD', color = 'b')
+    plt.plot(df.Date, macd, label='MACD', color = 'b')
     plt.plot(df.Date, signal, label='Signal Line', color='r')
     plt.legend(loc='upper left')
+    #plt.show()
+    plt.savefig('macd.jpg')
     plt.show()
+    
+    
+    # In[121]:    
+   
     
     
     # In[108]:
@@ -60,12 +66,7 @@ def quant_pred(df):
     df.head(10)
     
     
-    # In[121]:
-    
-    
-    plt.figure(figsize=(20,5))
-    plt.plot(df.Date,df.macd_chg)
-    
+   
     
     # In[122]:
     
@@ -96,6 +97,62 @@ def quant_pred(df):
     
     # In[125]:
     
+      
+    #RSI
+    df['chg'] = df.Close-df.Close.shift(1)
+    N=14
+    df['RSI']=np.zeros(df.shape[0])
+    i=0
+    while((i+N) < df.shape[0]):
+        chg = df.chg[i:i+N]
+        pos_chg = chg[chg>0].sum()/N
+        neg_chg = abs(chg[chg<0].sum())/N
+        RS = pos_chg/neg_chg    
+        df['RSI'][i+N] = 100-(100/(1+RS))
+        i+=1
+    
+    df.RSI.min()
+    df.RSI.max()   
+    
+    thresh = df.copy()
+    thresh['lower'] = 30
+    thresh['upper'] = 75
+    
+    df_nobuy = df[df.RSI>75]
+    
+    plt.figure(figsize=(20,5))
+    plt.plot(df.Date, df.RSI)
+    plt.plot(thresh.Date, thresh.lower)
+    plt.plot(thresh.Date, thresh.upper)
+    plt.show()
+       
+
+    # df['buy_rsi'] = df.RSI <=70
+    df['buy_rsi'] = df.RSI>=50
+    df.buy_rsi = df.buy_rsi.astype(int)
+    df.head(10)    
+    
+        
+    state=0
+    df_sig = []
+    for i in range(df.shape[0]):
+        if((df.buy_rsi[i]==1) & (state==0)):
+            state = 1
+            df_sig.append(df.iloc[i,:].to_frame().T)
+        if((df.buy_rsi[i]==0) & (state==1)):
+            state=0
+            df_sig.append(df.iloc[i].to_frame().T)
+            
+    df_sig = pd.concat(df_sig, axis=0)
+    df_sig = df_sig.reset_index(drop=True)
+    
+    df_sig['gainloss'] =100*(df_sig.Close-df_sig.Close.shift(1))/df_sig.Close.shift(1)
+    df_sig1 = df_sig[df_sig.buy_rsi==0]
+    
+    
+    gainloss_rsi = 100*(np.prod(1+df_sig1.gainloss/100)-1)    
+
+#macd    
     bear=0
     bull=0
     df['bull_period'] = np.empty(df.shape[0])
@@ -136,8 +193,7 @@ def quant_pred(df):
         if((i==df.shape[0]-1) & (bear>0)):
             tmp2.append(df.Date[i])
             dates_bear.append(tmp2)
-            df.bear_period[i-1] = bear+1
-              
+            df.bear_period[i-1] = bear+1             
     
             
         
@@ -155,7 +211,10 @@ def quant_pred(df):
     dates_bull['close_start'] = np.zeros(dates_bull.shape[0])
     dates_bull['close_end'] = np.zeros(dates_bull.shape[0])
     dates_bull['gain_loss'] = np.zeros(dates_bull.shape[0])
+    macd_act = []
     for i in range(dates_bull.shape[0]):
+        macd_act.append(df[df.Date==dates_bull.Start[i]])
+        macd_act.append(df[df.Date==dates_bull.End[i]])        
         subset = df[(df.Date>=dates_bull.Start[i]) & (df.Date<=dates_bull.End[i])]
         dates_bull.macd_max[i] = subset.macd.max()
         dates_bull.chg_max[i] = subset.macd_chg.max()
@@ -163,12 +222,27 @@ def quant_pred(df):
         dates_bull.close_start[i] = subset.Close.head(1)
         dates_bull.close_end[i] = subset.Close.tail(1)
         dates_bull.gain_loss[i] = 100*(float(subset.Close.tail(1))-float(subset.Close.head(1)))/float(subset.Close.head(1))
+    
+    macd_act = pd.concat(macd_act, axis=0)
+    
+    plt.figure(figsize=(20,5))
+    plt.plot(df.Date, df.Close)
+    plt.plot(macd_act.Date, macd_act.Close, 'o')
+    plt.savefig('buy_sell_points.png')
+    plt.show()
 
-    
-    gain_loss_alg = 100*(np.prod(1+dates_bull.gain_loss/100)-1)  
-    gain_loss_ref = 100*(float(df.Close.tail(1))-float(df.Close.head(1)))/float(df.Close.head(1))
-    
-    signals = dates_bull
+    #combination   
+         
+            
+    if (alg=='macd'):
+        gain_loss_alg = 100*(np.prod(1+dates_bull.gain_loss/100)-1)  
+        signals = dates_bull
+    elif (alg=='rsi'):
+        gain_loss_alg = gainloss_rsi
+        signals = df_sig
+        
+    gain_loss_ref = 100*(float(df.Close.tail(1))-float(df.Close.head(1)))/float(df.Close.head(1))    
+
     
     return (signals, gain_loss_alg, gain_loss_ref)
 
