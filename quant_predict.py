@@ -15,10 +15,83 @@ import matplotlib.pyplot as plt
 
 # In[106]:
 
-def quant_pred(df, alg):
+def quant_pred(df, alg, start, end):
     
     df.Date = pd.to_datetime(df.Date)
-
+    
+    #RSI
+    df['chg'] = df.Close-df.Close.shift(1)
+    N=14
+    df['RSI']=np.zeros(df.shape[0])
+    df.RSI = np.nan
+    i=0
+    while((i+N) < df.shape[0]):
+        chg = df.chg[i:i+N]
+        pos_chg = chg[chg>0].sum()/N
+        neg_chg = abs(chg[chg<0].sum())/N
+        RS = pos_chg/neg_chg    
+        df['RSI'][i+N] = 100-(100/(1+RS))
+        i+=1
+    
+    df=df[(df.Date>=pd.to_datetime(start)) & (df.Date<=pd.to_datetime(end))].reset_index(drop=True)
+    
+    df.RSI.min()
+    df.RSI.max()   
+    
+    thresh = df.copy()
+    thresh['lower'] = 40
+    thresh['upper'] = 75    
+   
+    plt.figure(figsize=(20,5))
+    plt.plot(df.Date, df.RSI)
+    plt.plot(thresh.Date, thresh.lower)
+    plt.plot(thresh.Date, thresh.upper)
+    plt.savefig('rsi.png')
+    plt.show()
+       
+    # df['buy_rsi'] = df.RSI <=70
+    # df['buy_rsi'] = df.RSI>=50
+    # df.buy_rsi = df.buy_rsi.astype(int)
+    # df.head(10)    
+    
+        
+    state=0
+    df_sig = []
+    buy_rsi = []
+    dates_rsi = []
+    for i in range(1,df.shape[0]):
+        #long
+        if((df.RSI[i]<=40) & (df.RSI[i]>df.RSI[i-1]) & (state==0)):
+            state = 1
+            df_sig.append(df.iloc[i,:].to_frame().T)
+            buy_rsi.append(1)
+            start_date = df.Date[i]
+        #short
+        if((df.RSI[i]>=75) & (df.RSI[i]<df.RSI[i-1]) & (state==1)):
+            state=0
+            df_sig.append(df.iloc[i].to_frame().T)
+            buy_rsi.append(0)
+            end_date = df.Date[i]
+            dates_rsi.append(pd.date_range(start_date,end_date))
+            
+    df_sig = pd.concat(df_sig, axis=0)
+    df_sig = df_sig.reset_index(drop=True)
+    df_sig['buy_rsi'] = buy_rsi
+    
+    df_sig['gainloss'] =100*(df_sig.Close-df_sig.Close.shift(1))/df_sig.Close.shift(1)
+    df_sig1 = df_sig[df_sig.buy_rsi==0]    
+    
+    gainloss_rsi = 100*(np.prod(1+df_sig1.gainloss/100)-1)  
+    
+    import matplotlib
+    cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
+    plt.figure(figsize=(20,5))
+    plt.plot(df.Date, df.Close)
+    plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
+    plt.savefig('buy_sell_rsi.png')
+    plt.show()
+    
+    #macd
 
     exp1 = df.Close.ewm(span=12, adjust=False).mean()
     exp2 = df.Close.ewm(span=26, adjust=False).mean()
@@ -96,63 +169,7 @@ def quant_pred(df, alg):
     
     
     # In[125]:
-    
-      
-    #RSI
-    df['chg'] = df.Close-df.Close.shift(1)
-    N=14
-    df['RSI']=np.zeros(df.shape[0])
-    i=0
-    while((i+N) < df.shape[0]):
-        chg = df.chg[i:i+N]
-        pos_chg = chg[chg>0].sum()/N
-        neg_chg = abs(chg[chg<0].sum())/N
-        RS = pos_chg/neg_chg    
-        df['RSI'][i+N] = 100-(100/(1+RS))
-        i+=1
-    
-    df.RSI.min()
-    df.RSI.max()   
-    
-    thresh = df.copy()
-    thresh['lower'] = 30
-    thresh['upper'] = 75
-    
-    df_nobuy = df[df.RSI>75]
-    
-    plt.figure(figsize=(20,5))
-    plt.plot(df.Date, df.RSI)
-    plt.plot(thresh.Date, thresh.lower)
-    plt.plot(thresh.Date, thresh.upper)
-    plt.show()
-       
-
-    # df['buy_rsi'] = df.RSI <=70
-    df['buy_rsi'] = df.RSI>=50
-    df.buy_rsi = df.buy_rsi.astype(int)
-    df.head(10)    
-    
-        
-    state=0
-    df_sig = []
-    for i in range(df.shape[0]):
-        if((df.buy_rsi[i]==1) & (state==0)):
-            state = 1
-            df_sig.append(df.iloc[i,:].to_frame().T)
-        if((df.buy_rsi[i]==0) & (state==1)):
-            state=0
-            df_sig.append(df.iloc[i].to_frame().T)
-            
-    df_sig = pd.concat(df_sig, axis=0)
-    df_sig = df_sig.reset_index(drop=True)
-    
-    df_sig['gainloss'] =100*(df_sig.Close-df_sig.Close.shift(1))/df_sig.Close.shift(1)
-    df_sig1 = df_sig[df_sig.buy_rsi==0]
-    
-    
-    gainloss_rsi = 100*(np.prod(1+df_sig1.gainloss/100)-1)    
-
-#macd    
+    #macd    
     bear=0
     bull=0
     df['bull_period'] = np.empty(df.shape[0])
@@ -212,9 +229,12 @@ def quant_pred(df, alg):
     dates_bull['close_end'] = np.zeros(dates_bull.shape[0])
     dates_bull['gain_loss'] = np.zeros(dates_bull.shape[0])
     macd_act = []
+    macd_sig = []
     for i in range(dates_bull.shape[0]):
         macd_act.append(df[df.Date==dates_bull.Start[i]])
-        macd_act.append(df[df.Date==dates_bull.End[i]])        
+        macd_act.append(df[df.Date==dates_bull.End[i]])   
+        macd_sig.append(1)
+        macd_sig.append(0)
         subset = df[(df.Date>=dates_bull.Start[i]) & (df.Date<=dates_bull.End[i])]
         dates_bull.macd_max[i] = subset.macd.max()
         dates_bull.chg_max[i] = subset.macd_chg.max()
@@ -224,14 +244,28 @@ def quant_pred(df, alg):
         dates_bull.gain_loss[i] = 100*(float(subset.Close.tail(1))-float(subset.Close.head(1)))/float(subset.Close.head(1))
     
     macd_act = pd.concat(macd_act, axis=0)
+    macd_act['sig'] = macd_sig
+    
+    # cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
+    # plt.figure(figsize=(20,5))
+    # plt.plot(df.Date, df.Close)
+    # plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
+    # plt.savefig('buy_sell_rsi.png')
+    # plt.show()
     
     plt.figure(figsize=(20,5))
     plt.plot(df.Date, df.Close)
-    plt.plot(macd_act.Date, macd_act.Close, 'o')
-    plt.savefig('buy_sell_points.png')
+    plt.scatter(macd_act.Date, macd_act.Close, c=macd_act.sig, cmap=cmap)
+    plt.savefig('buy_sell_points_macd.png')
     plt.show()
+    
+    
 
     #combination   
+    # for i in range(dates_bull.shape[0]):
+    #     dates_macd = pd.date_range(dates_bull.Start[i], dates_bull.End[i])
+    #     for i in range(len(dates_rsi)):
+            
          
             
     if (alg=='macd'):
