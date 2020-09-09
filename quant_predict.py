@@ -42,12 +42,12 @@ def quant_pred(df, alg, start, end):
     thresh['lower'] = 40
     thresh['upper'] = 75    
    
-    plt.figure(figsize=(20,5))
-    plt.plot(df.Date, df.RSI)
-    plt.plot(thresh.Date, thresh.lower)
-    plt.plot(thresh.Date, thresh.upper)
-    plt.savefig('rsi.png')
-    plt.show()
+    # plt.figure(figsize=(20,5))
+    # plt.plot(df.Date, df.RSI)
+    # plt.plot(thresh.Date, thresh.lower)
+    # plt.plot(thresh.Date, thresh.upper)
+    # plt.savefig('rsi.png')
+    # plt.show()
        
     # df['buy_rsi'] = df.RSI <=70
     # df['buy_rsi'] = df.RSI>=50
@@ -85,12 +85,14 @@ def quant_pred(df, alg, start, end):
     
     import matplotlib
     cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
-    plt.figure(figsize=(20,5))
-    plt.plot(df.Date, df.Close)
-    plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
-    plt.savefig('buy_sell_rsi.png')
-    plt.show()
-    
+    if(alg=='rsi'):
+        plt.figure(figsize=(20,5))
+        plt.title('Buy(green)/sell(red) signals based on RSI')
+        plt.plot(df.Date, df.Close)
+        plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
+        plt.savefig('buy_sell_rsi.png')
+        plt.show()
+        
     #macd
 
     exp1 = df.Close.ewm(span=12, adjust=False).mean()
@@ -101,9 +103,7 @@ def quant_pred(df, alg, start, end):
     macd = exp1-exp2
     signal = macd.ewm(span=9, adjust=False).mean()
     df['macd'] = macd-signal
-    
-    print(signal.shape)
-    print(macd.shape)
+
     
     
     # In[107]:
@@ -144,14 +144,14 @@ def quant_pred(df, alg, start, end):
     # In[122]:
     
     
-    plt.figure(figsize=(20,5))
-    horizontal = np.zeros(df.shape[0])
-    macd_norm = (df.macd-df.macd.mean())/df.macd.std()
-    price_norm = (df.Close-df.Close.mean())/(df.Close.std())
-    plt.plot(df.Date, macd_norm)
-    plt.plot(df.Date, horizontal)
-    plt.plot(df.Date, df.macd_dir)
-    plt.plot(df.Date, price_norm)
+    # plt.figure(figsize=(20,5))
+    # horizontal = np.zeros(df.shape[0])
+    # macd_norm = (df.macd-df.macd.mean())/df.macd.std()
+    # price_norm = (df.Close-df.Close.mean())/(df.Close.std())
+    # plt.plot(df.Date, macd_norm)
+    # plt.plot(df.Date, horizontal)
+    # plt.plot(df.Date, df.macd_dir)
+    # plt.plot(df.Date, price_norm)
     
     
     # In[123]:
@@ -220,11 +220,11 @@ def quant_pred(df, alg, start, end):
        
 
     dates_bull = pd.DataFrame(dates_bull, columns=['Start','End'])
-    dates_bull = dates_bull.assign(len = bull_periods.values)
+    dates_bull = dates_bull.assign(len_period = bull_periods.values)
     
-    dates_bull['macd_max'] = np.zeros(dates_bull.shape[0])
-    dates_bull['chg_max'] =  np.zeros(dates_bull.shape[0])
-    dates_bull['chg_pct_max'] = np.zeros(dates_bull.shape[0])
+    # dates_bull['macd_max'] = np.zeros(dates_bull.shape[0])
+    # dates_bull['chg_max'] =  np.zeros(dates_bull.shape[0])
+    # dates_bull['chg_pct_max'] = np.zeros(dates_bull.shape[0])
     dates_bull['close_start'] = np.zeros(dates_bull.shape[0])
     dates_bull['close_end'] = np.zeros(dates_bull.shape[0])
     dates_bull['gain_loss'] = np.zeros(dates_bull.shape[0])
@@ -236,9 +236,9 @@ def quant_pred(df, alg, start, end):
         macd_sig.append(1)
         macd_sig.append(0)
         subset = df[(df.Date>=dates_bull.Start[i]) & (df.Date<=dates_bull.End[i])]
-        dates_bull.macd_max[i] = subset.macd.max()
-        dates_bull.chg_max[i] = subset.macd_chg.max()
-        dates_bull.chg_pct_max[i] = subset.macd_chg_pct.max()
+        # dates_bull.macd_max[i] = subset.macd.max()
+        # dates_bull.chg_max[i] = subset.macd_chg.max()
+        # dates_bull.chg_pct_max[i] = subset.macd_chg_pct.max()
         dates_bull.close_start[i] = subset.Close.head(1)
         dates_bull.close_end[i] = subset.Close.tail(1)
         dates_bull.gain_loss[i] = 100*(float(subset.Close.tail(1))-float(subset.Close.head(1)))/float(subset.Close.head(1))
@@ -252,12 +252,13 @@ def quant_pred(df, alg, start, end):
     # plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
     # plt.savefig('buy_sell_rsi.png')
     # plt.show()
-    
-    plt.figure(figsize=(20,5))
-    plt.plot(df.Date, df.Close)
-    plt.scatter(macd_act.Date, macd_act.Close, c=macd_act.sig, cmap=cmap)
-    plt.savefig('buy_sell_points_macd.png')
-    plt.show()
+    if (alg=='macd'):
+        plt.figure(figsize=(20,5))
+        plt.title('Buy(green)/sell(red) signals based on MACD')
+        plt.plot(df.Date, df.Close)
+        plt.scatter(macd_act.Date, macd_act.Close, c=macd_act.sig, cmap=cmap)
+        plt.savefig('buy_sell_points_macd.png')
+        plt.show()
     
     
 
