@@ -243,6 +243,17 @@ def quant_pred(df, alg, start, end):
         dates_bull.close_end[i] = subset.Close.tail(1)
         dates_bull.gain_loss[i] = 100*(float(subset.Close.tail(1))-float(subset.Close.head(1)))/float(subset.Close.head(1))
     
+    
+    #modified version of signals where if the signal produces negative return, extend the signal to next period
+    signal2 = dates_bull.copy()
+    for i in range(dates_bull.shape[0]-1):
+        if(dates_bull.gain_loss[i]<0):
+            signal2.End[i] = signal2.End[i+1]
+            signal2.close_end[i] = dates_bull.close_end[i+1]
+            signal2.gain_loss[i] = 100*(signal2.close_end[i]-signal2.close_start[i])/signal2.close_start[i]
+            signal2.drop(i+1).reset_index()
+            
+
     macd_act = pd.concat(macd_act, axis=0)
     macd_act['sig'] = macd_sig
     
@@ -272,6 +283,7 @@ def quant_pred(df, alg, start, end):
     if (alg=='macd'):
         gain_loss_alg = 100*(np.prod(1+dates_bull.gain_loss/100)-1)  
         signals = dates_bull
+        
     elif (alg=='rsi'):
         gain_loss_alg = gainloss_rsi
         signals = df_sig
@@ -279,7 +291,7 @@ def quant_pred(df, alg, start, end):
     gain_loss_ref = 100*(float(df.Close.tail(1))-float(df.Close.head(1)))/float(df.Close.head(1))    
 
     
-    return (signals, gain_loss_alg, gain_loss_ref)
+    return (signals, signal2, gain_loss_alg, gain_loss_ref)
 
 
 # In[ ]:
