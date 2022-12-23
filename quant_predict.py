@@ -73,7 +73,7 @@ def quant_pred(df, alg, start, end):
             buy_rsi.append(0)
             end_date = df.Date[i]
             dates_rsi.append(pd.date_range(start_date,end_date))
-            
+    # added a comment        
     df_sig = pd.concat(df_sig, axis=0)
     df_sig = df_sig.reset_index(drop=True)
     df_sig['buy_rsi'] = buy_rsi
