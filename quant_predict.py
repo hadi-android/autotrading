@@ -1,23 +1,56 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+import warnings
+warnings.filterwarnings("ignore")
 
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
+from yahoo_historical import Fetcher
+import datetime
+import time
 
-#ticker = 'msft'
-#start = [2019,1,1]
-#
-#df = Fetcher(ticker, start).getHistorical()	
-##df = df[['Date','Close']]
-#df.Date = pd.to_datetime(df.Date)
-#df.head()
-#
 
-# In[106]:
+# <h3> Download QQQ price data from 2018-12-1 to 2020-9-9
 
-def quant_pred(df, alg, start, end):
+# In[12]:
+def quant_pred(ticker, start,end):
+
+    #ticker = 'ETH-CAD'
+    #dstart = '1-1-2021' #start date of data to calculate rolling averages
+    #actual_start = '1-1-2022' # actual start date where data is analyzed
     
+    
+    
+    
+    dstart = datetime.datetime.strptime(start, '%m-%d-%Y') -datetime.timedelta(days = 50) 
+    dstart = time.mktime(dstart.timetuple())
+    
+    df = Fetcher(ticker, dstart).get_historical()
     df.Date = pd.to_datetime(df.Date)
+    # df = df[:-1]
+    df.head()
+    
+    
+    rsi_lower = 40
+    rsi_upper = 75
+    
+    #52 ema of volume
+    df.Volume = df.Volume*1e-9
+    df['vol_avg'] = df.Volume.ewm(span=50,adjust=False).mean()
+    #df['vol_std'] = df.Volume.ewm(span=52,adjust=False).std()
+    df['vol_quantile'] = df.Volume.rolling(50).quantile(0.75, interpolation='midpoint')
+    
+    df.iloc[50:,:].head()
+    
+    
+    # In[2]:
+    
     
     #RSI
     df['chg'] = df.Close-df.Close.shift(1)
@@ -39,15 +72,15 @@ def quant_pred(df, alg, start, end):
     df.RSI.max()   
     
     thresh = df.copy()
-    thresh['lower'] = 40
-    thresh['upper'] = 75    
-   
-    # plt.figure(figsize=(20,5))
-    # plt.plot(df.Date, df.RSI)
-    # plt.plot(thresh.Date, thresh.lower)
-    # plt.plot(thresh.Date, thresh.upper)
-    # plt.savefig('rsi.png')
-    # plt.show()
+    thresh['lower'] = rsi_lower #40
+    thresh['upper'] = rsi_upper #75    
+       
+    plt.figure(figsize=(20,5))
+    plt.plot(df.Date, df.RSI)
+    plt.plot(thresh.Date, thresh.lower)
+    plt.plot(thresh.Date, thresh.upper)
+    plt.savefig('rsi.png')
+    plt.show()
        
     # df['buy_rsi'] = df.RSI <=70
     # df['buy_rsi'] = df.RSI>=50
@@ -85,16 +118,27 @@ def quant_pred(df, alg, start, end):
     
     import matplotlib
     cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
-    if(alg=='rsi'):
-        plt.figure(figsize=(20,5))
-        plt.title('Buy(green)/sell(red) signals based on RSI')
-        plt.plot(df.Date, df.Close)
-        plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
-        plt.savefig('buy_sell_rsi.png')
-        plt.show()
+    # if(alg=='rsi'):
+    plt.figure(figsize=(20,5))
+    plt.title('Buy(green)/sell(red) signals based on RSI')
+    plt.plot(df.Date, df.Close)
+    plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
+    plt.savefig('buy_sell_rsi.png')
+    plt.show()
         
+    
+    
+    # In[3]:
+    
+    
+    df.RSI.head()
+    
+    
+    # In[4]:
+    
+    
     #macd
-
+    
     exp1 = df.Close.ewm(span=12, adjust=False).mean()
     exp2 = df.Close.ewm(span=26, adjust=False).mean()
     
@@ -103,7 +147,7 @@ def quant_pred(df, alg, start, end):
     macd = exp1-exp2
     signal = macd.ewm(span=9, adjust=False).mean()
     df['macd'] = macd-signal
-
+    
     
     
     # In[107]:
@@ -119,7 +163,7 @@ def quant_pred(df, alg, start, end):
     
     
     # In[121]:    
-   
+       
     
     
     # In[108]:
@@ -127,19 +171,7 @@ def quant_pred(df, alg, start, end):
     
     #pd.set_option('max.rows',None)
     
-    df['macd_dir'] = df.macd>0
-    df.macd_dir = df.macd_dir.astype(int)
-    df['macd_chg'] = df.macd-df.macd.shift(1)
-    df['macd_chg_abs'] = abs(df['macd_chg'])
-    df['macd_chg_pct'] = (df.macd-df.macd.shift(1))/df.macd.shift(1)
-    df['macd_chg_dir'] = df.macd_chg_pct>0
-    df.macd_chg_dir = df.macd_chg_dir.astype(int)
-    df['macd_chg_pct_abs'] = abs(df.macd_chg_pct)
-    df=df[['Date','Close','macd','macd_dir','macd_chg','macd_chg_abs','macd_chg_pct','macd_chg_pct_abs','macd_chg_dir']]
-    df.head(10)
-    
-    
-   
+      
     
     # In[122]:
     
@@ -169,133 +201,189 @@ def quant_pred(df, alg, start, end):
     
     
     # In[125]:
-    #macd    
-    bear=0
-    bull=0
-    df['bull_period'] = np.empty(df.shape[0])
-    df.bull_period = np.nan
-    df['bear_period'] = np.empty(df.shape[0])
-    df.bear_period = np.nan
-    dates_bull=[]
-    dates_bear=[]
-    tmp=[]
-    tmp2=[]
-    for i in range(1,df.shape[0]):
-        if((df.macd[i]>0) & (df.macd[i-1]>0)):
-            if(bull==0):
-                tmp.append(df.Date[i-1])
-            bull+=1
-        if((bull>0) & (df.macd[i]<0)):
-            df.bull_period[i-1] = bull+1
-            tmp.append(df.Date[i-1])
-            dates_bull.append(tmp)
-            bull=0
-            tmp=[]
-        if((i==df.shape[0]-1) & (bull>0)):
-            tmp.append(df.Date[i])
-            dates_bull.append(tmp)
-            df.bull_period[i-1] = bull+1
-            
-            
-        if((df.macd[i]<0) & (df.macd[i-1]<0)):
-            if(bear==0):
-                tmp2.append(df.Date[i-1])
-            bear+=1
-        if((bear>0) & (df.macd[i]>0)):
-            df.bear_period[i-1] = bear+1
-            tmp2.append(df.Date[i-1])
-            dates_bear.append(tmp2)
-            bear=0  
-            tmp2=[]
-        if((i==df.shape[0]-1) & (bear>0)):
-            tmp2.append(df.Date[i])
-            dates_bear.append(tmp2)
-            df.bear_period[i-1] = bear+1             
-    
-            
-        
-    bull_periods = df.bull_period[df.bull_period.isnull()==False]
-    len(bull_periods)
-    bull_periods.reset_index(drop=True)  
-       
-
-    dates_bull = pd.DataFrame(dates_bull, columns=['Start','End'])
-    dates_bull = dates_bull.assign(len_period = bull_periods.values)
-    
-    # dates_bull['macd_max'] = np.zeros(dates_bull.shape[0])
-    # dates_bull['chg_max'] =  np.zeros(dates_bull.shape[0])
-    # dates_bull['chg_pct_max'] = np.zeros(dates_bull.shape[0])
-    dates_bull['close_start'] = np.zeros(dates_bull.shape[0])
-    dates_bull['close_end'] = np.zeros(dates_bull.shape[0])
-    dates_bull['gain_loss'] = np.zeros(dates_bull.shape[0])
-    macd_act = []
-    macd_sig = []
-    for i in range(dates_bull.shape[0]):
-        macd_act.append(df[df.Date==dates_bull.Start[i]])
-        macd_act.append(df[df.Date==dates_bull.End[i]])   
-        macd_sig.append(1)
-        macd_sig.append(0)
-        subset = df[(df.Date>=dates_bull.Start[i]) & (df.Date<=dates_bull.End[i])]
-        # dates_bull.macd_max[i] = subset.macd.max()
-        # dates_bull.chg_max[i] = subset.macd_chg.max()
-        # dates_bull.chg_pct_max[i] = subset.macd_chg_pct.max()
-        dates_bull.close_start[i] = subset.Close.head(1)
-        dates_bull.close_end[i] = subset.Close.tail(1)
-        dates_bull.gain_loss[i] = 100*(float(subset.Close.tail(1))-float(subset.Close.head(1)))/float(subset.Close.head(1))
+    #Identify dates of macd reversals
     
     
-    #modified version of signals where if the signal produces negative return, extend the signal to next period
-    signal2 = dates_bull.copy()
-    for i in range(dates_bull.shape[0]-1):
-        if(dates_bull.gain_loss[i]<0):
-            signal2.End[i] = signal2.End[i+1]
-            signal2.close_end[i] = dates_bull.close_end[i+1]
-            signal2.gain_loss[i] = 100*(signal2.close_end[i]-signal2.close_start[i])/signal2.close_start[i]
-            signal2.drop(i+1).reset_index()
-            
-
-    macd_act = pd.concat(macd_act, axis=0)
-    macd_act['sig'] = macd_sig
-    
-    # cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
-    # plt.figure(figsize=(20,5))
-    # plt.plot(df.Date, df.Close)
-    # plt.scatter(df_sig.Date, df_sig.Close, c=df_sig.buy_rsi, cmap=cmap)
-    # plt.savefig('buy_sell_rsi.png')
-    # plt.show()
-    if (alg=='macd'):
-        plt.figure(figsize=(20,5))
-        plt.title('Buy(green)/sell(red) signals based on MACD')
-        plt.plot(df.Date, df.Close)
-        plt.scatter(macd_act.Date, macd_act.Close, c=macd_act.sig, cmap=cmap)
-        plt.savefig('buy_sell_points_macd.png')
-        plt.show()
+    # In[5]:
     
     
-
-    #combination   
-    # for i in range(dates_bull.shape[0]):
-    #     dates_macd = pd.date_range(dates_bull.Start[i], dates_bull.End[i])
-    #     for i in range(len(dates_rsi)):
-            
-         
-            
-    if (alg=='macd'):
-        gain_loss_alg = 100*(np.prod(1+dates_bull.gain_loss/100)-1)  
-        signals = dates_bull
-        
-    elif (alg=='rsi'):
-        gain_loss_alg = gainloss_rsi
-        signals = df_sig
-        
-    gain_loss_ref = 100*(float(df.Close.tail(1))-float(df.Close.head(1)))/float(df.Close.head(1))    
-
+    df['macd_lag'] = df.macd.shift(1)
+    df['reversal'] = df.macd*df.macd_lag #if this value is negative, there is a reversal
+    df.reversal = df.reversal<0
+    df.reversal = df.reversal.astype(int)
+    df.head(10)
     
-    return (signals, signal2, gain_loss_alg, gain_loss_ref)
-
-
-# In[ ]:
-
-
-
-
+    
+    # In[6]:
+    
+    
+    reversal_indices = df[df.reversal==1].index
+    reversal_indices
+    
+    
+    # In[7]:
+    
+    
+    # if first signal is a sell, remove it
+    if df.macd[reversal_indices[0]] < df.macd_lag[reversal_indices[0]]:
+        reversal_indices = reversal_indices[1:]
+    reversal_indices   
+    
+    
+    # In[8]:
+    
+    
+    reversal_indices.shape
+    
+    
+    # In[9]:
+    
+    
+    macd_reversals = df[df.index.isin(reversal_indices)].reset_index(drop=True)
+    macd_reversals.head()
+    
+    
+    # In[92]:
+    
+    
+    macd_reversals.to_csv('macd_reversals.csv', index=False)
+    
+    
+    # In[10]:
+    
+    
+    for i in range(macd_reversals.shape[0]):
+        if macd_reversals.macd[i]>0 and macd_reversals.macd_lag[i]<0:
+            macd_reversals.reversal[i] = 1 # buy signal
+        elif macd_reversals.macd[i]<0 and macd_reversals.macd_lag[i]>0:
+            macd_reversals.reversal[i] = 0 #sell signal
+    
+    
+    macd_reversals.head()
+    
+    
+    # In[11]:
+    
+    
+    plt.figure(figsize=(20,5))
+    plt.plot(df.Date, macd, label='MACD', color = 'b')
+    plt.plot(df.Date, signal, label='Signal Line', color='r')
+    plt.legend(loc='upper left')
+    #plt.show()
+    plt.savefig('macd.jpg')
+    plt.show()
+    
+    cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
+    # if(alg=='rsi'):
+    plt.figure(figsize=(20,5))
+    plt.title('Buy(green)/sell(red) signals based on MACD')
+    plt.plot(df.Date, df.Close)
+    plt.scatter(macd_reversals.Date, macd_reversals.Close, c=macd_reversals.reversal, cmap=cmap)
+    plt.savefig('buy_sell_rsi.png')
+    plt.show()
+    
+    
+    # In[12]:
+    
+    
+    df.head()
+    
+    
+    # In[13]:
+    
+    
+    df.RSI
+    
+    
+    # In[ ]:
+    
+    
+    
+    
+    
+    # In[14]:
+    
+    
+    #df.to_csv('df.csv',index=False)
+    
+    
+    # In[15]:
+    
+    
+    reversal_indices.shape
+    
+    
+    # In[16]:
+    
+    
+    reversal_indices[0]
+    
+    
+    # In[17]:
+    
+    
+    df['buy_sell'] = 0
+    df.head()
+    
+    
+    # In[18]:
+    
+    
+    j=0
+    df.RSI[j] > 70 or df.Volume[j] > 20
+    
+    
+    # In[81]:
+    
+    
+    signals_macd_rsi = df.iloc[reversal_indices,:].reset_index(drop=True)
+    signals_macd_rsi['buy_sell'] = 0
+    signals_macd_rsi.loc[signals_macd_rsi.macd>signals_macd_rsi.macd_lag, 'buy_sell'] = 1   
+    
+    cmap = matplotlib.colors.ListedColormap(["red","green"], name='from_list', N=None)
+    # if(alg=='rsi'):
+    plt.figure(figsize=(20,5))
+    plt.title('Buy(green)/sell(red) signals based on Algorithm')
+    plt.plot(df.Date, df.Close)
+    plt.scatter(signals_macd_rsi.Date, signals_macd_rsi.Close, c=signals_macd_rsi.buy_sell, cmap=cmap)
+    plt.savefig('buy_sell_rsi.png')
+    plt.show()
+    
+    
+    # In[86]:
+    
+    
+    #gain_loss_alg = 100*(np.prod(1+dates_bull.gain_loss/100)-1)  
+    
+    
+    # In[87]:
+    
+    
+    signals_macd_rsi = signals_macd_rsi[['Date','Close','Volume','vol_quantile','RSI','macd','macd_lag','buy_sell']]
+    signals_macd_rsi['close_lag'] = signals_macd_rsi.Close.shift(1)
+    signals_macd_rsi.head()
+    
+    
+    # In[88]:
+    
+    
+    signals_macd_rsi['gain_loss'] = (signals_macd_rsi.Close-signals_macd_rsi.close_lag)/signals_macd_rsi.close_lag
+    signals_macd_rsi.loc[signals_macd_rsi.buy_sell==1,'gain_loss'] = 0
+    
+    signals_macd_rsi
+    # In[89]:
+    
+    
+    
+    
+    
+    # In[90]:    
+    gain_loss_alg = 100*(np.prod(1+signals_macd_rsi.gain_loss)-1)  
+    gain_loss_alg
+    
+    gain_loss_ref = 100*(df.iloc[-1,:].Close - df.Close[0])/df.Close[0]
+    #gain_loss_ref=0
+    
+    return df, signals_macd_rsi, gain_loss_alg, gain_loss_ref    
+    
+    
